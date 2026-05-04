@@ -47,7 +47,7 @@ see seven tools under the `ibkh` server.
 - *What genes do lupus and macular degeneration share?* → `find_shared_genes`
 - *Of those, which does hydroxychloroquine touch?* → `find_shared_genes_impacted_by_drug`
 - *What lupus drugs avoid the macular-degeneration gene network?* → `find_alternative_drugs`
-- *Find lupus genes that regulate macular-degeneration genes within 2 hops* →
+- *Find lupus genes that regulate macular-degeneration genes both directly and indirectly.* →
   `find_regulatory_gene_paths`
 - *How many drugs treat lupus in total?* → falls through to `read_neo4j_cypher` after
   `get_neo4j_schema`
