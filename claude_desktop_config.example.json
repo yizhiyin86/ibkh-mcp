@@ -1,0 +1,21 @@
+{
+  "_comment_paths": "Replace <ABS_PATH_TO_REPO> with the absolute path where you cloned this repo (no ~ expansion in Claude Desktop). Replace <UV_PATH> with the output of `which uv`.",
+  "_comment_creds": "Request your own iBKH Neo4j credentials from the repo owner. Do not commit a real password here.",
+  "mcpServers": {
+    "ibkh": {
+      "command": "<UV_PATH>",
+      "args": [
+        "run",
+        "--project", "<ABS_PATH_TO_REPO>",
+        "python", "<ABS_PATH_TO_REPO>/server.py"
+      ],
+      "env": {
+        "NEO4J_URI": "neo4j+ssc://<host>:<port>",
+        "NEO4J_USERNAME": "<your-username>",
+        "NEO4J_PASSWORD": "<your-password>",
+        "NEO4J_DATABASE": "ibkh",
+        "IBKH_ALLOW_WRITES": "false"
+      }
+    }
+  }
+}
