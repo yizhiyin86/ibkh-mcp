@@ -11,9 +11,6 @@ SLE patients commonly receive hydroxychloroquine (Plaquenil) from rheumatologist
 ---
 
 ## Open *(~30 sec)*
-
-> "Here's a real clinical scenario. A rheumatologist prescribes hydroxychloroquine — Plaquenil — to an SLE patient. It works. But for women of European descent, there's roughly a one-in-five chance that patient eventually develops macular degeneration. We've always known this happens — but tracing the genetic connections that might explain *why* has traditionally meant weeks of literature review, specialist consultations, and a fair amount of educated guesswork.
->
 > Here's a real clinical scenario. A rheumatologist prescribes hydroxychloroquine — Plaquenil — to an SLE patient. It works. But for women of European descent, there's roughly a one-in-five chance that patient eventually develops macular degeneration. We've always known this happens — but tracing the genetic connections that might explain why has traditionally meant weeks of literature review, specialist consultations, and a fair amount of educated guesswork.
 What I want to show you today is how a physician or a researcher can start exploring those connections in plain language — in seconds — using a biomedical knowledge graph built on Neo4j. For a clinician, it means asking 'is there a genetic reason this patient might be at higher risk?' and getting a biologically grounded starting point before writing the prescription. For a researcher, it means uncovering candidate drugs and genetic pathways that would otherwise take weeks of literature review to surface. The graph doesn't replace judgment — it makes the underlying biology easier to navigate, for anyone asking the question. Five questions. All live.
 
