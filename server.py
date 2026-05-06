@@ -32,24 +32,32 @@ def _records(result) -> list[dict[str, Any]]:
     return [r.data() for r in result]
 
 
+def _trace_response(cypher: str, params: dict[str, Any], rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """Standard response shape for curated tools.
+
+    Returning a dict with `cypher`, `params`, `row_count`, and `rows` makes the executed
+    query visible in Claude's tool-output panel — users can click the tool card above the
+    response to inspect the exact query that ran. This is the audit/traceability surface;
+    the chat answer itself stays clean.
+    """
+    return {
+        "cypher": cypher.strip(),
+        "params": params,
+        "row_count": len(rows),
+        "rows": rows,
+    }
+
+
 # --------------------------- Curated tools ---------------------------
 
 
 @mcp.tool()
-def find_shared_genes(disease_a: str, disease_b: str, limit: int = 200) -> list[dict[str, Any]]:
+def find_shared_genes(disease_a: str, disease_b: str, limit: int = 200) -> dict[str, Any]:
     """Find genes ASSOCIATED_WITH both diseases (case-insensitive partial name match).
 
     Use for "what genes do disease X and disease Y share?" questions.
-    Returns rows of {disease_a, disease_b, gene}.
-
-    Cypher template executed (verbatim):
-        MATCH (d1:Disease)-[:ASSOCIATED_WITH]->(g:Gene)<-[:ASSOCIATED_WITH]-(d2:Disease)
-        WHERE toLower(d1.name) CONTAINS toLower($disease_a)
-          AND toLower(d2.name) CONTAINS toLower($disease_b)
-          AND elementId(d1) <> elementId(d2)
-        RETURN DISTINCT d1.name AS disease_a, d2.name AS disease_b, g.symbol AS gene
-        ORDER BY gene
-        LIMIT $limit
+    Response shape: {cypher, params, row_count, rows}. Each row is
+    {disease_a, disease_b, gene}.
     """
     cypher = """
     MATCH (d1:Disease)-[:ASSOCIATED_WITH]->(g:Gene)<-[:ASSOCIATED_WITH]-(d2:Disease)
@@ -60,10 +68,10 @@ def find_shared_genes(disease_a: str, disease_b: str, limit: int = 200) -> list[
     ORDER BY gene
     LIMIT $limit
     """
+    params = {"disease_a": disease_a, "disease_b": disease_b, "limit": limit}
     with driver.session(database=DB) as s:
-        return s.execute_read(
-            lambda tx: _records(tx.run(cypher, disease_a=disease_a, disease_b=disease_b, limit=limit))
-        )
+        rows = s.execute_read(lambda tx: _records(tx.run(cypher, **params)))
+    return _trace_response(cypher, params, rows)
 
 
 @mcp.tool()
@@ -72,24 +80,13 @@ def find_shared_genes_impacted_by_drug(
     disease_b: str,
     drug_prefix: str,
     limit: int = 200,
-) -> list[dict[str, Any]]:
+) -> dict[str, Any]:
     """Find genes shared between two diseases that a specific drug also touches.
 
     `drug_prefix` is matched case-insensitively against the start of Drug.name
     (e.g. "hydroxychloro" finds Hydroxychloroquine).
-    Returns rows of {disease_a, disease_b, drug, gene, drug_gene_relation}.
-
-    Cypher template executed (verbatim):
-        MATCH (d1:Disease)-[:ASSOCIATED_WITH]->(g:Gene)<-[:ASSOCIATED_WITH]-(d2:Disease),
-              (d1)<-[:TREATS]-(dr:Drug)-[r]-(g)
-        WHERE toLower(d1.name) CONTAINS toLower($disease_a)
-          AND toLower(d2.name) CONTAINS toLower($disease_b)
-          AND toLower(dr.name) STARTS WITH toLower($drug_prefix)
-          AND elementId(d1) <> elementId(d2)
-        RETURN DISTINCT d1.name AS disease_a, d2.name AS disease_b,
-               dr.name AS drug, g.symbol AS gene, type(r) AS drug_gene_relation
-        ORDER BY drug, gene
-        LIMIT $limit
+    Response shape: {cypher, params, row_count, rows}. Each row is
+    {disease_a, disease_b, drug, gene, drug_gene_relation}.
     """
     cypher = """
     MATCH (d1:Disease)-[:ASSOCIATED_WITH]->(g:Gene)<-[:ASSOCIATED_WITH]-(d2:Disease),
@@ -103,38 +100,25 @@ def find_shared_genes_impacted_by_drug(
     ORDER BY drug, gene
     LIMIT $limit
     """
+    params = {
+        "disease_a": disease_a,
+        "disease_b": disease_b,
+        "drug_prefix": drug_prefix,
+        "limit": limit,
+    }
     with driver.session(database=DB) as s:
-        return s.execute_read(
-            lambda tx: _records(
-                tx.run(
-                    cypher,
-                    disease_a=disease_a,
-                    disease_b=disease_b,
-                    drug_prefix=drug_prefix,
-                    limit=limit,
-                )
-            )
-        )
+        rows = s.execute_read(lambda tx: _records(tx.run(cypher, **params)))
+    return _trace_response(cypher, params, rows)
 
 
 @mcp.tool()
-def find_alternative_drugs(disease: str, avoid_disease: str, limit: int = 100) -> list[dict[str, Any]]:
+def find_alternative_drugs(disease: str, avoid_disease: str, limit: int = 100) -> dict[str, Any]:
     """Drugs that TREAT `disease` and are NOT linked (via any out-edge) to genes
     ASSOCIATED_WITH `avoid_disease`.
 
     Use for "alternatives to drug X for condition A that don't impact condition B" questions.
     Both names are case-insensitive partial matches.
-
-    Cypher template executed (verbatim):
-        MATCH (dr:Drug)-[:TREATS]->(d:Disease)
-        WHERE toLower(d.name) CONTAINS toLower($disease)
-          AND NOT EXISTS {
-            MATCH (dr)-[]->(g:Gene)<-[:ASSOCIATED_WITH]-(d2:Disease)
-            WHERE toLower(d2.name) CONTAINS toLower($avoid_disease)
-          }
-        RETURN DISTINCT dr.name AS drug
-        ORDER BY drug
-        LIMIT $limit
+    Response shape: {cypher, params, row_count, rows}. Each row is {drug}.
     """
     cypher = """
     MATCH (dr:Drug)-[:TREATS]->(d:Disease)
@@ -147,12 +131,10 @@ def find_alternative_drugs(disease: str, avoid_disease: str, limit: int = 100) -
     ORDER BY drug
     LIMIT $limit
     """
+    params = {"disease": disease, "avoid_disease": avoid_disease, "limit": limit}
     with driver.session(database=DB) as s:
-        return s.execute_read(
-            lambda tx: _records(
-                tx.run(cypher, disease=disease, avoid_disease=avoid_disease, limit=limit)
-            )
-        )
+        rows = s.execute_read(lambda tx: _records(tx.run(cypher, **params)))
+    return _trace_response(cypher, params, rows)
 
 
 @mcp.tool()
@@ -161,28 +143,17 @@ def find_regulatory_gene_paths(
     disease_b: str,
     max_hops: int = 2,
     limit: int = 200,
-) -> list[dict[str, Any]]:
+) -> dict[str, Any]:
     """Find gene paths between two diseases via 0–`max_hops` SAME_PROTEIN_OR_COMPLEX edges.
 
     Surfaces indirect gene–gene regulation between diseases (Jeff's variable-hop pattern).
-    `max_hops` is bounded to 0–5. Returns {disease_a, disease_b, source_gene, target_gene, hops}.
-
-    Cypher template executed (verbatim, with `<MAX_HOPS>` substituted at call time because
-    Cypher quantified path patterns require a literal upper bound):
-        MATCH p=(d1:Disease)-[:ASSOCIATED_WITH]->(g1:Gene)
-              ((:Gene)<-[:SAME_PROTEIN_OR_COMPLEX]-(:Gene)){0,<MAX_HOPS>}
-              (g2:Gene)<-[:ASSOCIATED_WITH]-(d2:Disease)
-        WHERE toLower(d1.name) CONTAINS toLower($disease_a)
-          AND toLower(d2.name) CONTAINS toLower($disease_b)
-        RETURN DISTINCT d1.name AS disease_a, d2.name AS disease_b,
-               g1.symbol AS source_gene, g2.symbol AS target_gene, length(p) AS hops
-        ORDER BY hops, source_gene
-        LIMIT $limit
+    `max_hops` is bounded to 0–5. Note: `max_hops` is substituted into the Cypher as a literal
+    (Cypher quantified path patterns require a literal upper bound) — value is validated first.
+    Response shape: {cypher, params, row_count, rows}. Each row is
+    {disease_a, disease_b, source_gene, target_gene, hops}.
     """
     if not isinstance(max_hops, int) or not 0 <= max_hops <= 5:
         raise ValueError("max_hops must be an int in [0, 5]")
-    # max_hops is interpolated as a literal because Cypher quantified path patterns
-    # require literal bounds. Value is validated above to prevent injection.
     cypher = f"""
     MATCH p=(d1:Disease)-[:ASSOCIATED_WITH]->(g1:Gene)
           ((:Gene)<-[:SAME_PROTEIN_OR_COMPLEX]-(:Gene)){{0,{max_hops}}}
@@ -194,12 +165,11 @@ def find_regulatory_gene_paths(
     ORDER BY hops, source_gene
     LIMIT $limit
     """
+    params = {"disease_a": disease_a, "disease_b": disease_b, "limit": limit}
     with driver.session(database=DB) as s:
-        return s.execute_read(
-            lambda tx: _records(
-                tx.run(cypher, disease_a=disease_a, disease_b=disease_b, limit=limit)
-            )
-        )
+        rows = s.execute_read(lambda tx: _records(tx.run(cypher, **params)))
+    # max_hops is part of the Cypher literal, not the params dict — surface it for traceability
+    return _trace_response(cypher, {**params, "max_hops_literal": max_hops}, rows)
 
 
 # --------------------------- Ad-hoc tools ---------------------------

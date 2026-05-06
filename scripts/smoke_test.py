@@ -9,8 +9,15 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import server  # noqa: E402
 
 
-def show(name, rows):
-    print(f"\n=== {name} ({len(rows)} rows) ===")
+def show(name, result):
+    """Render either a curated-tool dict ({cypher, params, row_count, rows}) or a raw row list."""
+    if isinstance(result, dict) and "rows" in result:
+        rows = result["rows"]
+        print(f"\n=== {name} ({result['row_count']} rows) ===")
+        print(f"  params: {result['params']}")
+    else:
+        rows = result
+        print(f"\n=== {name} ({len(rows)} rows) ===")
     for r in rows[:5]:
         print(json.dumps(r, default=str))
     if len(rows) > 5:
